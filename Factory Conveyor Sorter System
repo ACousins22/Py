@@ -1,72 +1,68 @@
 from pyjop import *
+import time
 
 # Connect to the current SimEnv
 SimEnv.connect()
 
 # Create references to entities in the SimEnv
-env = SimEnvManager.first()
+env = SimEnvManager.first().reset()
 firstscanner = RangeFinder.find("scan0")  # center scanner
 rightscanner = RangeFinder.find("scan1")  # right-side scanner
 
 # Directly find the specific conveyor belts
-belt0 = ConveyorBelt.find("belt0")  # Assuming "belt0" is the identifier
-belt1 = ConveyorBelt.find("belt1")  # Center L-R Belt
-belt2 = ConveyorBelt.find("belt2")  # Leftmost belt
-belt3 = ConveyorBelt.find("belt3")  # Rightmost belt
-belt4 = ConveyorBelt.find("belt4")  # Box (left) or Cone (right) belt
+belt0 = ConveyorBelt.find("belt0")
+belt1 = ConveyorBelt.find("belt1")
+belt2 = ConveyorBelt.find("belt2")
+belt3 = ConveyorBelt.find("belt3")
+belt4 = ConveyorBelt.find("belt4")
 objspawn = ObjectSpawner.find("spawner")
 
-if belt0 is None:
-    print("Error: belt0 not found.")
-else:
-    while SimEnv.run_main():
-        # Get the RFID tag from the first scanner
-        tag = firstscanner.get_rfid_tag()
-        tag2 = rightscanner.get_rfid_tag()
-        
-        # Check the distance from the first scanner
-        distance = firstscanner.get_distance()
-        
-        # Determine the action based on the RFID tag and distance
-        if tag == "Box":
-            if belt1.get_is_transporting():
-                belt0.set_target_speed(0)
-            else:
-                belt0.set_target_speed(5)  # Set the speed for belt0
-                belt1.set_target_speed(2)  # Move items right
-                belt3.set_target_speed(2)  # Engage rightside belt to flow to the next scan point
-        elif tag == "Barrel":
-            if belt1.get_is_transporting():
-                belt0.set_target_speed(0)
-            else:
-                belt0.set_target_speed(5)  # Set the speed for belt0 to progress
-                belt1.set_target_speed(-5)  # Move items left
-                belt2.set_target_speed(5)  # Engage belt2 to deliver
-        elif tag == "Cone":
-            if belt1.get_is_transporting():
-                belt0.set_target_speed(0)
-            else:
-                belt0.set_target_speed(5)  # Set the speed for belt0
-                belt1.set_target_speed(3)  # Move items right
-                belt3.set_target_speed(2)  # Engage rightside belt to flow to the next scan point
-        else:  # If tag is not recognized or belt empty
-            objspawn.spawn()
-            print("Spawning Object")
+def set_belt_speeds(belt_speeds):
+    for belt, speed in belt_speeds.items():
+        belt.set_target_speed(speed)
 
-        if tag2 == "Box":
-            if belt4.get_is_transporting():
-                sleep(5)
-            else:
-                belt3.set_target_speed(1)
-                belt4.set_target_speed(-3)
-        elif tag2 == "Cone":
-            if belt4.get_is_transporting():
-                sleep(5)
-            else:
-                belt3.set_target_speed(1)
-                belt4.set_target_speed(3)
-        else:  # if item not compatible
-            belt4.set_target_speed(0)  # Stops belt
+# Main loop
+while SimEnv.run_main():
+    # Check if belt0 is transporting
+    belt0_transporting = belt0.get_is_transporting()
+
+    if not belt0_transporting:
+        # If belt0 is not transporting, spawn a new object
+        objspawn.spawn()
+        print("Spawning new object.")
+
+    # Read the RFID tag for the current item on belt0
+    tag = firstscanner.get_rfid_tag()
+
+    # Set belt0 to move items forward at speed 5
+    belt0.set_target_speed(5)
+
+    # Set belt1 direction based on the tag
+    if tag == "Box":
+        set_belt_speeds({belt1: 10, belt3: 10})  # Move right for Box
+    elif tag == "Barrel":
+        set_belt_speeds({belt1: -10, belt2: 10})  # Move left for Barrel
+    elif tag == "Cone":
+        set_belt_speeds({belt1: 10, belt3: 10})  # Move right for Cone
+
+    # Wait for belt1 to finish transporting
+    while belt1.get_is_transporting():
+        time.sleep(1)
+
+    # Check final delivery on belt4 (final delivery logic)
+    tag2 = rightscanner.get_rfid_tag()
+    if tag2 == "Box":
+        if belt4.get_is_transporting():
+            belt3.set_target_speed(0)  # Stop belt3 while belt4 is transporting
+        else:
+            set_belt_speeds({belt3: 10, belt4: -10})  # Move belt3 forward and belt4 backward for Box
+    elif tag2 == "Cone":
+        if belt4.get_is_transporting():
+            belt3.set_target_speed(0)  # Stop belt3 while belt4 is transporting
+        else:
+            set_belt_speeds({belt3: 10, belt4: 10})  # Move belt3 forward and belt4 forward for Cone
+    else:
+        belt4.set_target_speed(0)  # Stop belt4 if no recognizable tag
 
 # Cleanup close code
 SimEnv.disconnect()
