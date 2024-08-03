@@ -1,0 +1,72 @@
+from pyjop import *
+
+# Connect to the current SimEnv
+SimEnv.connect()
+
+# Create references to entities in the SimEnv
+env = SimEnvManager.first()
+firstscanner = RangeFinder.find("scan0")  # center scanner
+rightscanner = RangeFinder.find("scan1")  # right-side scanner
+
+# Directly find the specific conveyor belts
+belt0 = ConveyorBelt.find("belt0")  # Assuming "belt0" is the identifier
+belt1 = ConveyorBelt.find("belt1")  # Center L-R Belt
+belt2 = ConveyorBelt.find("belt2")  # Leftmost belt
+belt3 = ConveyorBelt.find("belt3")  # Rightmost belt
+belt4 = ConveyorBelt.find("belt4")  # Box (left) or Cone (right) belt
+objspawn = ObjectSpawner.find("spawner")
+
+if belt0 is None:
+    print("Error: belt0 not found.")
+else:
+    while SimEnv.run_main():
+        # Get the RFID tag from the first scanner
+        tag = firstscanner.get_rfid_tag()
+        tag2 = rightscanner.get_rfid_tag()
+        
+        # Check the distance from the first scanner
+        distance = firstscanner.get_distance()
+        
+        # Determine the action based on the RFID tag and distance
+        if tag == "Box":
+            if belt1.get_is_transporting():
+                belt0.set_target_speed(0)
+            else:
+                belt0.set_target_speed(5)  # Set the speed for belt0
+                belt1.set_target_speed(2)  # Move items right
+                belt3.set_target_speed(2)  # Engage rightside belt to flow to the next scan point
+        elif tag == "Barrel":
+            if belt1.get_is_transporting():
+                belt0.set_target_speed(0)
+            else:
+                belt0.set_target_speed(5)  # Set the speed for belt0 to progress
+                belt1.set_target_speed(-5)  # Move items left
+                belt2.set_target_speed(5)  # Engage belt2 to deliver
+        elif tag == "Cone":
+            if belt1.get_is_transporting():
+                belt0.set_target_speed(0)
+            else:
+                belt0.set_target_speed(5)  # Set the speed for belt0
+                belt1.set_target_speed(3)  # Move items right
+                belt3.set_target_speed(2)  # Engage rightside belt to flow to the next scan point
+        else:  # If tag is not recognized or belt empty
+            objspawn.spawn()
+            print("Spawning Object")
+
+        if tag2 == "Box":
+            if belt4.get_is_transporting():
+                sleep(5)
+            else:
+                belt3.set_target_speed(1)
+                belt4.set_target_speed(-3)
+        elif tag2 == "Cone":
+            if belt4.get_is_transporting():
+                sleep(5)
+            else:
+                belt3.set_target_speed(1)
+                belt4.set_target_speed(3)
+        else:  # if item not compatible
+            belt4.set_target_speed(0)  # Stops belt
+
+# Cleanup close code
+SimEnv.disconnect()
