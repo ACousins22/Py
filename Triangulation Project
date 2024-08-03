@@ -1,0 +1,20 @@
+from pyjop import *
+
+SimEnv.connect()
+env = SimEnvManager.first().reset() # Initialises and resets environment to default state
+platform = MovablePlatform.first()  # Defines the platform so we can call
+arm = RobotArm.first()  # Defines the arm so we can call
+
+while SimEnv.run_main():
+    offset = GPSWaypoint.find("StartOffset").get_location().xy # Return start offset as X Y Coordinates
+    dropoff = GPSWaypoint.find("DropOff").get_location() # Returns Drop Off location for barrel
+    rangefinder_a = RangeFinder.find("A").get_distance()  # Defines the RF & fetches distance
+    rangefinder_b = RangeFinder.find("B").get_distance()  # Defines the RF & fetches distance
+    rangefinder_c = RangeFinder.find("C").get_distance()  # Defines the RF & fetches distance
+    arm.set_grabber_location(0, 2, 0) #Extends robotic arm into position to receive barrel
+    platform.set_target_location((rangefinder_b + 0.3, rangefinder_c - 1.6, 0) - offset)  # Goes to barrel location
+    sleep(5)  # Short sleep to avoid busy waiting
+    arm.pickup() # Arm grabs barrel
+    platform.set_target_location(dropoff) # Sends platform to dropoff location
+    sleep(5) #Waits, to prevent reiteration of functions before completion
+SimEnv.disconnect()
